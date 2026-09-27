@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi Música con Letra</title>
+<style>
+  :root {
+    --bg: #121212;
+    --card: #1e1e1e;
+    --text: #e0e0e0;
+    --accent: #1db954;
+    --muted: #888;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 1rem;
+  }
+  h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+  .app {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  @media (max-width: 800px) {
+    .app { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  audio { width: 100%; margin: 0.5rem 0; }
+  .controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  button {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary {
+    background: #333;
+    color: #fff;
+  }
+  #lyrics {
+    margin-top: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    font-size: 1rem;
+  }
+  #lyrics .line {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    transition: background 0.2s;
+  }
+  #lyrics .line.active {
+    background: var(--accent);
+    color: #000;
+    font-weight: bold;
+  }
+  ul { list-style: none; }
+  li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px solid #333;
+    cursor: pointer;
+  }
+  li:hover { background: #2a2a2a; }
+  li.active { background: #1db95433; }
+  li button {
+    background: transparent;
+    color: #ff5555;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  input, textarea {
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: #2a2a2a;
+    color: var(--text);
+    font-family: inherit;
+  }
+  textarea { min-height: 120px; resize: vertical; }
+  label { font-size: 0.9rem; color: var(--muted); }
+  .hint { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+</style>
+</head>
+<body>
+  <h1>🎵 Mi Música con Letra</h1>
+  <div class="app">
+    <!-- Reproductor y letra -->
+    <div class="card">
+      <h2 id="now-title">Selecciona una canción</h2>
+      <audio id="audio" controls></audio>
+      <div class="controls">
+        <button id="prev" class="secondary">⏮ Anterior</button>
+        <button id="playPause">▶ Play</button>
+        <button id="next" class="secondary">Siguiente ⏭</button>
+      </div>
+      <div id="lyrics">Aquí aparecerá la letra...</div>
+    </div>
+
+    <!-- Lista y agregar -->
+    <div class="card">
+      <h3>📋 Playlist</h3>
+      <ul id="song-list"></ul>
+
+      <h3 style="margin-top:1rem;">➕ Agregar canción</h3>
+      <form id="add-form">
+        <input type="text" id="new-title" placeholder="Título" required>
+        <input type="text" id="new-artist" placeholder="Artista">
+        <input type="url" id="new-url" placeholder="URL del audio (mp3, etc.)" required>
+        <textarea id="new-lyrics" placeholder="Letra (opcional). Puedes usar formato LRC con [mm:ss.xx] para sincronizar."></textarea>
+        <button type="submit">Agregar a mi música</button>
+      </form>
+      <div class="hint">Los datos se guardan en tu navegador (localStorage).</div>
+    </div>
+  </div>
+
+<script>
+  // ---------- Datos ----------
+  const STORAGE_KEY = 'miMusicaFav';
+
+  // Canciones de ejemplo. Puedes borrar esto y poner las tuyas.
+  const defaultSongs = [
+    {
+      title: "Ejemplo: SoundHelix Song 1",
+      artist: "SoundHelix",
+      url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+      lyrics: `[00:00.00] (Ejemplo de letra sincronizada)
+[00:05.00] Esta es una canción de prueba
+[00:10.00] Puedes agregar tus propias canciones
+[00:15.00] Y pegar la letra aquí
+[00:20.00] Si usas [mm:ss.xx] se sincroniza
+[00:25.00] Si no, se muestra como texto normal`
+    }
+  ];
+
+  let songs = [];
+  let currentIndex = -1;
+
+  // Elementos
+  const audio = document.getElementById('audio');
+  const nowTitle = document.getElementById('now-title');
+  const lyricsDiv = document.getElementById('lyrics');
+  const songList = document.getElementById('song-list');
+  const playPauseBtn = document.getElementById('playPause');
+  const prevBtn = document.getElementById('prev');
+  const nextBtn = document.getElementById('next');
+  const addForm = document.getElementById('add-form');
+
+  // ---------- Cargar/Guardar ----------
+  function loadSongs() {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        songs = JSON.parse(stored);
+      } catch(e) {
+        songs = [...defaultSongs];
+      }
+    } else {
+      songs = [...defaultSongs];
+    }
+  }
+
+  function saveSongs() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(songs));
+  }
+
+  // ---------- Render ----------
+  function renderPlaylist() {
+    songList.innerHTML = '';
+    songs.forEach((song, index) => {
+      const li = document.createElement('li');
+      li.dataset.index = index;
+      if (index === currentIndex) li.classList.add('active');
+
+      const info = document.createElement('div');
+      info.innerHTML = `<strong>${song.title}</strong><br><small>${song.artist || ''}</small>`;
+      li.appendChild(info);
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '✕';
+      delBtn.title = 'Eliminar';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        songs.splice(index, 1);
+        if (index === currentIndex) {
+          currentIndex = -1;
+          audio.pause();
+          audio.src = '';
+          nowTitle.textContent = 'Selecciona una canción';
+          lyricsDiv.innerHTML = 'Aquí aparecerá la letra...';
+        } else if (index < currentIndex) {
+          currentIndex--;
+        }
+        saveSongs();
+        renderPlaylist();
+      });
+
+      li.appendChild(delBtn);
+      li.addEventListener('click', () => playSong(index));
+      songList.appendChild(li);
+    });
+  }
+
+  // ---------- Letras ----------
+  let lyricLines = []; // { time, text, element }
+
+  function parseLyrics(raw) {
+    lyricsDiv.innerHTML = '';
+    lyricLines = [];
+    if (!raw || !raw.trim()) {
+      lyricsDiv.textContent = 'Sin letra.';
+      return;
+    }
+
+    const lines = raw.split('\n');
+    const hasLRC = lines.some(line => /\[\d{2}:\d{2}\.\d{2,3}\]/.test(line));
+
+    if (hasLRC) {
+      const lrcRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
+      lines.forEach(line => {
+        lrcRegex.lastIndex = 0;
+        const match = lrcRegex.exec(line);
+        if (match) {
+          const min = parseInt(match[1], 10);
+          const sec = parseInt(match[2], 10);
+          const ms = parseInt(match[3].padEnd(3, '0'), 10);
+          const time = min * 60 + sec + ms / 1000;
+          const text = line.replace(lrcRegex, '').trim();
+          if (text) {
+            const div = document.createElement('div');
+            div.className = 'line';
+            div.textContent = text;
+            lyricsDiv.appendChild(div);
+            lyricLines.push({ time, text, element: div });
+          }
+        } else {
+          if (line.trim()) {
+            const div = document.createElement('div');
+            div.className = 'line';
+            div.textContent = line.trim();
+            lyricsDiv.appendChild(div);
+          }
+        }
+      });
+      lyricLines.sort((a, b) => a.time - b.time);
+    } else {
+      lines.forEach(line => {
+        const div = document.createElement('div');
+        div.className = 'line';
+        div.textContent = line;
+        lyricsDiv.appendChild(div);
+      });
+    }
+  }
+
+  function updateLyricsHighlight() {
+    if (!lyricLines.length) return;
+    const t = audio.currentTime;
+    let activeIndex = -1;
+    for (let i = 0; i < lyricLines.length; i++) {
+      if (lyricLines[i].time <= t) activeIndex = i;
+      else break;
+    }
+    lyricLines.forEach((line, i) => {
+      if (i === activeIndex) {
+        line.element.classList.add('active');
+        line.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        line.element.classList.remove('active');
+      }
+    });
+  }
+
+  // ---------- Reproducir ----------
+  function playSong(index) {
+    if (index < 0 || index >= songs.length) return;
+    currentIndex = index;
+    const song = songs[index];
+    audio.src = song.url;
+    audio.play().catch(e => console.warn('Error al reproducir:', e));
+    nowTitle.textContent = `${song.title} — ${song.artist || 'Desconocido'}`;
+    parseLyrics(song.lyrics);
+    renderPlaylist();
+    playPauseBtn.textContent = '⏸ Pausa';
+  }
+
+  playPauseBtn.addEventListener('click', () => {
+    if (audio.paused) {
+      if (currentIndex === -1 && songs.length) playSong(0);
+      else audio.play();
+      playPauseBtn.textContent = '⏸ Pausa';
+    } else {
+      audio.pause();
+      playPauseBtn.textContent = '▶ Play';
+    }
+  });
+
+  prevBtn.addEventListener('click', () => {
+    if (currentIndex > 0) playSong(currentIndex - 1);
+    else if (songs.length) playSong(0);
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if (currentIndex < songs.length - 1) playSong(currentIndex + 1);
+    else if (songs.length) playSong(0);
+  });
+
+  audio.addEventListener('timeupdate', updateLyricsHighlight);
+  audio.addEventListener('ended', () => {
+    if (currentIndex < songs.length - 1) playSong(currentIndex + 1);
+    else playPauseBtn.textContent = '▶ Play';
+  });
+
+  // ---------- Agregar canción ----------
+  addForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const title = document.getElementById('new-title').value.trim();
+    const artist = document.getElementById('new-artist').value.trim();
+    const url = document.getElementById('new-url').value.trim();
+    const lyrics = document.getElementById('new-lyrics').value;
+
+    if (!title || !url) return;
+
+    songs.push({ title, artist, url, lyrics });
+    saveSongs();
+    renderPlaylist();
+    addForm.reset();
+    alert('Canción agregada 🎶');
+  });
+
+  // ---------- Init ----------
+  loadSongs();
+  renderPlaylist();
+</script>
+</body>
+</html>
