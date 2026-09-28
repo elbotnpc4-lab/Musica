@@ -31,12 +31,15 @@
     <div class="main-header">
       <div class="song-title muted" id="songTitle">Selecciona una cancion</div>
       <div class="header-actions">
+        <button class="auto-btn" id="autoBtn">Auto Scroll</button>
         <div class="speed-frame" id="speedFrame">
-          <label for="speed">Velocidad</label>
+          <button class="playpause" id="playPauseBtn" title="Pausar">
+            <span class="icon-pause" id="iconPause"></span>
+            <span class="icon-play" id="iconPlay" style="display:none;"></span>
+          </button>
           <input type="range" id="speed" min="1" max="100" value="25">
           <span id="speedVal">25</span>
         </div>
-        <button class="auto-btn" id="autoBtn">Auto Scroll</button>
       </div>
     </div>
 
