@@ -15,10 +15,19 @@
       <span class="count" id="songCount">0</span>
       <button class="btn-add" id="openAdd" title="Agregar">+</button>
     </div>
+    <div class="filters">
+      <button class="filter active" data-filter="all">Todas</button>
+      <button class="filter" data-filter="good">Con letra</button>
+      <button class="filter" data-filter="empty">Sin letra</button>
+      <button class="filter" data-filter="bad">Letra mala</button>
+    </div>
     <div class="search-wrap">
       <input type="text" id="search" placeholder="Buscar...">
     </div>
     <ul class="song-list" id="songList"></ul>
+    <div class="sidebar-footer">
+      <button class="export-btn" id="exportBtn">Exportar letras.json</button>
+    </div>
   </aside>
 
   <div class="overlay" id="overlay"></div>
