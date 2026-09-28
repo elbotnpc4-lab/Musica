@@ -4,8 +4,8 @@ const PATHS = {
   buscar:    'todo/buscar.json'
 };
 
-const STORAGE_KEY = 'letras_app_songs_v2';
-const RECENT_KEY  = 'letras_app_recent_v2';
+const STORAGE_KEY = 'letras_app_songs_v3';
+const RECENT_KEY  = 'letras_app_recent_v3';
 
 let songs = [];
 let currentId = null;
@@ -13,6 +13,7 @@ let editingId = null;
 let autoOn = false;
 let rafId = null;
 let searchTemplate = '';
+let currentFilter = 'all';
 
 const $ = id => document.getElementById(id);
 const songListEl = $('songList');
@@ -74,6 +75,30 @@ function slug(str) {
     .replace(/^-+|-+$/g, '');
 }
 
+function clasificarLetra(texto) {
+  if (!texto) return 'empty';
+  const t = texto.trim();
+  if (!t) return 'empty';
+  if (t.length < 200) return 'bad';
+  const lower = t.toLowerCase();
+  const basura = [
+    'contributors',
+    'sencillos del mes',
+    'letras.com',
+    'lyrics',
+    'this lyrics is not',
+    'no lyrics',
+    'letra no disponible',
+    'no disponible'
+  ];
+  for (const b of basura) {
+    if (lower.includes(b)) return 'bad';
+  }
+  const lineas = t.split('\n').filter(l => l.trim()).length;
+  if (lineas < 3) return 'bad';
+  return 'good';
+}
+
 async function bootstrap() {
   loadLocal();
 
@@ -126,6 +151,9 @@ function renderList() {
     a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
   );
   if (q) visible = visible.filter(s => s.name.toLowerCase().includes(q));
+  if (currentFilter !== 'all') {
+    visible = visible.filter(s => clasificarLetra(s.lyrics) === currentFilter);
+  }
 
   songListEl.innerHTML = '';
   songCountEl.textContent = songs.length;
@@ -134,7 +162,7 @@ function renderList() {
     const li = document.createElement('li');
     li.className = 'empty';
     li.textContent = songs.length
-      ? 'Sin resultados'
+      ? 'Sin resultados en este filtro'
       : 'Sin canciones. Pulsa + para agregar.';
     songListEl.appendChild(li);
     return;
@@ -144,12 +172,25 @@ function renderList() {
     const li = document.createElement('li');
     li.dataset.id = song.id;
     if (song.id === currentId) li.classList.add('active');
-    const tieneLetra = !!(song.lyrics && song.lyrics.trim());
-    li.classList.add(tieneLetra ? 'has-lyrics' : 'no-lyrics');
+    const tipo = clasificarLetra(song.lyrics);
+    li.classList.add(
+      tipo === 'good' ? 'has-lyrics' :
+      tipo === 'bad'  ? 'bad-lyrics' :
+                        'no-lyrics'
+    );
 
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = song.name;
+
+    const edit = document.createElement('button');
+    edit.className = 'edit';
+    edit.textContent = '\u270E';
+    edit.title = 'Editar letra';
+    edit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openModal(song);
+    });
 
     const del = document.createElement('button');
     del.className = 'del';
@@ -172,6 +213,7 @@ function renderList() {
     });
 
     li.appendChild(name);
+    li.appendChild(edit);
     li.appendChild(del);
     li.addEventListener('click', () => {
       selectSong(song.id);
@@ -290,11 +332,14 @@ lyricsWrap.addEventListener('touchstart', () => {
 
 function openModal(song = null) {
   editingId = song ? song.id : null;
-  modalTitle.textContent = song ? 'Editar cancion' : 'Agregar cancion';
+  modalTitle.textContent = song ? 'Editar letra' : 'Agregar cancion';
   inTitle.value = song ? song.name : '';
-  inLyrics.value = song ? song.lyrics : '';
+  inLyrics.value = song ? (song.lyrics || '') : '';
   modalBg.classList.add('show');
-  setTimeout(() => inTitle.focus(), 30);
+  setTimeout(() => {
+    if (song) inLyrics.focus();
+    else inTitle.focus();
+  }, 30);
 }
 function closeModal() {
   modalBg.classList.remove('show');
@@ -327,6 +372,34 @@ $('saveBtn').addEventListener('click', () => {
   renderList();
   closeModal();
   selectSong(id);
+});
+
+document.querySelectorAll('.filter').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    renderList();
+  });
+});
+
+$('exportBtn').addEventListener('click', () => {
+  const exportObj = {};
+  const ordenado = songs.slice().sort((a, b) =>
+    a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
+  );
+  ordenado.forEach(s => {
+    exportObj[s.id] = s.lyrics || '';
+  });
+  const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'letras.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 });
 
 titleEl.addEventListener('dblclick', () => {
