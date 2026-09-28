@@ -25,6 +25,9 @@ const autoBtn    = $('autoBtn');
 const speedFrame = $('speedFrame');
 const speedEl    = $('speed');
 const speedVal   = $('speedVal');
+const playPauseBtn = $('playPauseBtn');
+const iconPause  = $('iconPause');
+const iconPlay   = $('iconPlay');
 const modalBg    = $('modalBg');
 const modalTitle = $('modalTitle');
 const inTitle    = $('inTitle');
@@ -212,14 +215,17 @@ function selectSong(id) {
   pushRecent(id);
   renderList();
   stopAuto();
+  speedFrame.classList.remove('show');
+  autoBtn.classList.remove('active');
 }
 
 function startAuto() {
   if (autoOn) return;
   autoOn = true;
-  autoBtn.classList.add('active');
-  autoBtn.textContent = 'Detener';
-  speedFrame.classList.add('show');
+  playPauseBtn.classList.remove('paused');
+  iconPause.style.display = '';
+  iconPlay.style.display = 'none';
+  playPauseBtn.title = 'Pausar';
 
   let last = performance.now();
   const step = (now) => {
@@ -231,7 +237,7 @@ function startAuto() {
     lyricsWrap.scrollTop += pxPerSec * dt;
 
     if (lyricsWrap.scrollTop + lyricsWrap.clientHeight >= lyricsWrap.scrollHeight - 1) {
-      stopAuto();
+      pauseAuto();
       return;
     }
     rafId = requestAnimationFrame(step);
@@ -239,20 +245,43 @@ function startAuto() {
   rafId = requestAnimationFrame(step);
 }
 
+function pauseAuto() {
+  autoOn = false;
+  playPauseBtn.classList.add('paused');
+  iconPause.style.display = 'none';
+  iconPlay.style.display = '';
+  playPauseBtn.title = 'Reanudar';
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+}
+
 function stopAuto() {
   autoOn = false;
-  autoBtn.classList.remove('active');
-  autoBtn.textContent = 'Auto Scroll';
+  playPauseBtn.classList.remove('paused');
+  iconPause.style.display = '';
+  iconPlay.style.display = 'none';
+  playPauseBtn.title = 'Pausar';
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
 }
 
 autoBtn.addEventListener('click', () => {
-  if (autoOn) {
-    stopAuto();
+  if (speedFrame.classList.contains('show')) {
     speedFrame.classList.remove('show');
+    autoBtn.classList.remove('active');
+    stopAuto();
+    return;
+  }
+  if (!currentId) { alert('Selecciona una cancion primero'); return; }
+  speedFrame.classList.add('show');
+  autoBtn.classList.add('active');
+  startAuto();
+});
+
+playPauseBtn.addEventListener('click', () => {
+  if (autoOn) {
+    pauseAuto();
   } else {
-    if (!currentId) { alert('Selecciona una cancion primero'); return; }
     startAuto();
   }
 });
@@ -261,8 +290,8 @@ speedEl.addEventListener('input', () => {
   speedVal.textContent = speedEl.value;
 });
 
-lyricsWrap.addEventListener('wheel', () => { if (autoOn) stopAuto(); }, { passive: true });
-lyricsWrap.addEventListener('touchstart', () => { if (autoOn) stopAuto(); }, { passive: true });
+lyricsWrap.addEventListener('wheel', () => { if (autoOn) pauseAuto(); }, { passive: true });
+lyricsWrap.addEventListener('touchstart', () => { if (autoOn) pauseAuto(); }, { passive: true });
 
 function openModal(song = null) {
   editingId = song ? song.id : null;
@@ -332,7 +361,8 @@ document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'TEXTAREA') {
     e.preventDefault();
-    autoBtn.click();
+    if (autoOn) pauseAuto();
+    else if (currentId) startAuto();
   }
 });
 
