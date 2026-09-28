@@ -11,7 +11,6 @@ let songs = [];
 let currentId = null;
 let editingId = null;
 let autoOn = false;
-let frameOpen = false;
 let rafId = null;
 let searchTemplate = '';
 
@@ -217,10 +216,12 @@ function selectSong(id) {
   lyricsWrap.scrollTop = 0;
   pushRecent(id);
   renderList();
-  closeAutoFrame();
+  stopAuto();
 }
 
 function startAuto() {
+  if (autoOn) return;
+  if (!currentId) return;
   autoOn = true;
   playPauseBtn.classList.remove('paused');
   playPauseBtn.title = 'Pausar';
@@ -246,40 +247,31 @@ function startAuto() {
 function pauseAuto() {
   autoOn = false;
   playPauseBtn.classList.add('paused');
-  playPauseBtn.title = 'Reanudar';
+  playPauseBtn.title = 'Reproducir';
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
 }
 
 function stopAuto() {
   autoOn = false;
-  playPauseBtn.classList.remove('paused');
-  playPauseBtn.title = 'Pausar';
+  playPauseBtn.classList.add('paused');
+  playPauseBtn.title = 'Reproducir';
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
 }
 
-function openAutoFrame() {
-  if (!currentId) { alert('Selecciona una cancion primero'); return; }
-  frameOpen = true;
-  speedFrame.classList.add('show');
-  autoBtn.classList.add('active');
-  startAuto();
-}
-
-function closeAutoFrame() {
-  frameOpen = false;
-  speedFrame.classList.remove('show');
-  autoBtn.classList.remove('active');
-  stopAuto();
-}
-
 autoBtn.addEventListener('click', () => {
-  if (frameOpen) closeAutoFrame();
-  else openAutoFrame();
+  if (speedFrame.classList.contains('show')) {
+    speedFrame.classList.remove('show');
+    autoBtn.classList.remove('active');
+  } else {
+    speedFrame.classList.add('show');
+    autoBtn.classList.add('active');
+  }
 });
 
 playPauseBtn.addEventListener('click', () => {
+  if (!currentId) { alert('Selecciona una cancion primero'); return; }
   if (autoOn) pauseAuto();
   else startAuto();
 });
@@ -365,9 +357,12 @@ document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'TEXTAREA') {
     e.preventDefault();
-    if (!frameOpen) openAutoFrame();
-    else if (autoOn) pauseAuto();
-    else startAuto();
+    if (!speedFrame.classList.contains('show')) {
+      speedFrame.classList.add('show');
+      autoBtn.classList.add('active');
+    }
+    if (autoOn) pauseAuto();
+    else if (currentId) startAuto();
   }
 });
 
