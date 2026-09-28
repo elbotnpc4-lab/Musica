@@ -11,11 +11,13 @@ let songs = [];
 let currentId = null;
 let editingId = null;
 let autoOn = false;
+let frameOpen = false;
 let rafId = null;
 let searchTemplate = '';
 
 const $ = id => document.getElementById(id);
 const songListEl = $('songList');
+const songCountEl = $('songCount');
 const searchEl   = $('search');
 const lyricsEl   = $('lyrics');
 const lyricsWrap = $('lyricsWrap');
@@ -26,8 +28,6 @@ const speedFrame = $('speedFrame');
 const speedEl    = $('speed');
 const speedVal   = $('speedVal');
 const playPauseBtn = $('playPauseBtn');
-const iconPause  = $('iconPause');
-const iconPlay   = $('iconPlay');
 const modalBg    = $('modalBg');
 const modalTitle = $('modalTitle');
 const inTitle    = $('inTitle');
@@ -129,6 +129,7 @@ function renderList() {
   if (q) visible = visible.filter(s => s.name.toLowerCase().includes(q));
 
   songListEl.innerHTML = '';
+  songCountEl.textContent = songs.length;
 
   if (!visible.length) {
     const li = document.createElement('li');
@@ -144,6 +145,8 @@ function renderList() {
     const li = document.createElement('li');
     li.dataset.id = song.id;
     if (song.id === currentId) li.classList.add('active');
+    const tieneLetra = !!(song.lyrics && song.lyrics.trim());
+    li.classList.add(tieneLetra ? 'has-lyrics' : 'no-lyrics');
 
     const name = document.createElement('span');
     name.className = 'name';
@@ -214,17 +217,12 @@ function selectSong(id) {
   lyricsWrap.scrollTop = 0;
   pushRecent(id);
   renderList();
-  stopAuto();
-  speedFrame.classList.remove('show');
-  autoBtn.classList.remove('active');
+  closeAutoFrame();
 }
 
 function startAuto() {
-  if (autoOn) return;
   autoOn = true;
   playPauseBtn.classList.remove('paused');
-  iconPause.style.display = '';
-  iconPlay.style.display = 'none';
   playPauseBtn.title = 'Pausar';
 
   let last = performance.now();
@@ -248,8 +246,6 @@ function startAuto() {
 function pauseAuto() {
   autoOn = false;
   playPauseBtn.classList.add('paused');
-  iconPause.style.display = 'none';
-  iconPlay.style.display = '';
   playPauseBtn.title = 'Reanudar';
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
@@ -258,40 +254,47 @@ function pauseAuto() {
 function stopAuto() {
   autoOn = false;
   playPauseBtn.classList.remove('paused');
-  iconPause.style.display = '';
-  iconPlay.style.display = 'none';
   playPauseBtn.title = 'Pausar';
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
 }
 
-autoBtn.addEventListener('click', () => {
-  if (speedFrame.classList.contains('show')) {
-    speedFrame.classList.remove('show');
-    autoBtn.classList.remove('active');
-    stopAuto();
-    return;
-  }
+function openAutoFrame() {
   if (!currentId) { alert('Selecciona una cancion primero'); return; }
+  frameOpen = true;
   speedFrame.classList.add('show');
   autoBtn.classList.add('active');
   startAuto();
+}
+
+function closeAutoFrame() {
+  frameOpen = false;
+  speedFrame.classList.remove('show');
+  autoBtn.classList.remove('active');
+  stopAuto();
+}
+
+autoBtn.addEventListener('click', () => {
+  if (frameOpen) closeAutoFrame();
+  else openAutoFrame();
 });
 
 playPauseBtn.addEventListener('click', () => {
-  if (autoOn) {
-    pauseAuto();
-  } else {
-    startAuto();
-  }
+  if (autoOn) pauseAuto();
+  else startAuto();
 });
 
 speedEl.addEventListener('input', () => {
   speedVal.textContent = speedEl.value;
 });
 
-lyricsWrap.addEventListener('wheel', () => { if (autoOn) pauseAuto(); }, { passive: true });
-lyricsWrap.addEventListener('touchstart', () => { if (autoOn) pauseAuto(); }, { passive: true });
+lyricsWrap.addEventListener('wheel', () => {
+  if (autoOn) pauseAuto();
+}, { passive: true });
+
+lyricsWrap.addEventListener('touchstart', () => {
+  if (autoOn) pauseAuto();
+}, { passive: true });
 
 function openModal(song = null) {
   editingId = song ? song.id : null;
@@ -319,18 +322,19 @@ $('saveBtn').addEventListener('click', () => {
   if (editingId) {
     const s = songs.find(x => x.id === editingId);
     if (s) { s.name = name; s.lyrics = lyrics; }
-  } else {
-    const id = slug(name) + '_' + Date.now().toString(36);
-    songs.push({ id, name, lyrics });
     saveLocal();
     renderList();
+    if (currentId === editingId) selectSong(editingId);
     closeModal();
-    selectSong(id);
     return;
   }
+
+  const id = slug(name) + '_' + Date.now().toString(36);
+  songs.push({ id, name, lyrics });
   saveLocal();
   renderList();
   closeModal();
+  selectSong(id);
 });
 
 titleEl.addEventListener('dblclick', () => {
@@ -361,8 +365,9 @@ document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'TEXTAREA') {
     e.preventDefault();
-    if (autoOn) pauseAuto();
-    else if (currentId) startAuto();
+    if (!frameOpen) openAutoFrame();
+    else if (autoOn) pauseAuto();
+    else startAuto();
   }
 });
 
